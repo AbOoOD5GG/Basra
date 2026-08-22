@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>عداد الباصرة</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+body {
+    margin: 0;
+    background: #101827;
+    color: white;
+    font-family: Arial, sans-serif;
+}
+
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #101827;
+    padding: 15px 10px 10px;
+    text-align: center;
+    border-bottom: 1px solid #334155;
+}
+
+h1 {
+    margin: 0 0 5px;
+    font-size: 24px;
+}
+
+#counter {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+#status {
+    color: #94a3b8;
+    margin-top: 4px;
+}
+
+.buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+button {
+    font-family: inherit;
+}
+
+.control {
+    flex: 1;
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    color: white;
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.undo {
+    background: #475569;
+}
+
+.reset {
+    background: #dc2626;
+}
+
+.container {
+    max-width: 700px;
+    margin: auto;
+    padding: 10px;
+}
+
+.summary {
+    background: #1e293b;
+    border-radius: 14px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.summary-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.rank-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+}
+
+.rank {
+    background: #334155;
+    border-radius: 8px;
+    padding: 6px 2px;
+    text-align: center;
+}
+
+.rank strong {
+    display: block;
+    font-size: 15px;
+}
+
+.rank span {
+    font-size: 11px;
+    color: #cbd5e1;
+}
+
+/* 52 cards */
+
+.cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.card {
+    border: none;
+    padding: 0;
+    aspect-ratio: 0.70;
+    background: white;
+    color: #111827;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.5);
+    transition: 0.12s;
+}
+
+.card.red {
+    color: #dc2626;
+}
+
+.card .number {
+    font-size: 30px;
+    font-weight: 900;
+}
+
+.card .suit {
+    font-size: 34px;
+    line-height: 1;
+}
+
+.card.used {
+    background: #64748b;
+    color: #e2e8f0;
+    opacity: 0.35;
+    transform: scale(0.94);
+    box-shadow: none;
+}
+
+.card.used.red {
+    color: #e2e8f0;
+}
+
+.card.used::after {
+    content: "✓";
+    position: absolute;
+    font-size: 30px;
+    font-weight: bold;
+    color: white;
+}
+
+.info {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 12px;
+    margin: 15px 5px 25px;
+    line-height: 1.6;
+}
+
+@media (min-width: 600px) {
+    .cards {
+        grid-template-columns: repeat(8, 1fr);
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+
+    <h1>🃏 عدّاد الباصرة</h1>
+
+    <div id="counter">
+        52 / 52 ورقة متبقية
+    </div>
+
+    <div id="status">
+        كل الأوراق موجودة
+    </div>
+
+    <div class="buttons">
+
+        <button class="control undo" onclick="undo()">
+            ↩️ تراجع
+        </button>
+
+        <button class="control reset" onclick="resetGame()">
+            🔄 جولة جديدة
+        </button>
+
+    </div>
+
+</div>
+
+
+<div class="container">
+
+    <div class="summary">
+
+        <div class="summary-title">
+            عدد الأوراق المتبقية من كل قيمة
+        </div>
+
+        <div id="rankSummary" class="rank-grid"></div>
+
+    </div>
+
+
+    <div id="cards" class="cards"></div>
+
+
+    <div class="info">
+        اضغط على الورقة عندما تعرف أنها خرجت من اللعب.
+        <br>
+        الورقة الرمادية = مستخدمة.
+        <br>
+        اضغط عليها مرة ثانية لإرجاعها.
+    </div>
+
+</div>
+
+
+<script>
+
+const suits = [
+    { symbol: "♠", red: false },
+    { symbol: "♥", red: true },
+    { symbol: "♦", red: true },
+    { symbol: "♣", red: false }
+];
+
+const ranks = [
+    "A",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "J",
+    "Q",
+    "K"
+];
+
+
+let cards = [];
+let history = [];
+
+
+/* إنشاء الـ52 ورقة */
+
+for (const rank of ranks) {
+
+    for (const suit of suits) {
+
+        cards.push({
+
+            id: rank + suit.symbol,
+
+            rank: rank,
+
+            suit: suit.symbol,
+
+            red: suit.red,
+
+            used: false
+
+        });
+
+    }
+
+}
+
+
+/* عرض الأوراق */
+
+function renderCards() {
+
+    const container = document.getElementById("cards");
+
+    container.innerHTML = "";
+
+
+    cards.forEach(card => {
+
+        const button = document.createElement("button");
+
+        button.className = "card";
+
+        if (card.red) {
+            button.classList.add("red");
+        }
+
+        if (card.used) {
+            button.classList.add("used");
+        }
+
+
+        button.innerHTML = `
+
+            <div class="number">
+                ${card.rank}
+            </div>
+
+            <div class="suit">
+                ${card.suit}
+            </div>
+
+        `;
+
+
+        button.onclick = function() {
+
+            toggleCard(card.id);
+
+        };
+
+
+        container.appendChild(button);
+
+    });
+
+
+    updateCounter();
+
+    updateSummary();
+
+}
+
+
+/* استخدام / إرجاع الورقة */
+
+function toggleCard(id) {
+
+    const card = cards.find(c => c.id === id);
+
+    if (!card) return;
+
+
+    history.push({
+
+        id: id,
+
+        previous: card.used
+
+    });
+
+
+    card.used = !card.used;
+
+
+    renderCards();
+
+}
+
+
+/* عداد الـ52 */
+
+function updateCounter() {
+
+    const remaining =
+        cards.filter(card => !card.used).length;
+
+
+    const used = 52 - remaining;
+
+
+    document.getElementById("counter").textContent =
+        remaining + " / 52 ورقة متبقية";
+
+
+    if (remaining === 52) {
+
+        document.getElementById("status").textContent =
+            "كل الأوراق موجودة";
+
+    }
+
+    else if (remaining === 0) {
+
+        document.getElementById("status").textContent =
+            "لا توجد أوراق متبقية";
+
+    }
+
+    else {
+
+        document.getElementById("status").textContent =
+            "تم استخدام " + used + " ورقة";
+
+    }
+
+}
+
+
+/* عدد كل قيمة */
+
+function updateSummary() {
+
+    const summary =
+        document.getElementById("rankSummary");
+
+    summary.innerHTML = "";
+
+
+    ranks.forEach(rank => {
+
+        const remaining =
+            cards.filter(
+                card =>
+                    card.rank === rank &&
+                    !card.used
+            ).length;
+
+
+        const box =
+            document.createElement("div");
+
+        box.className = "rank";
+
+
+        box.innerHTML = `
+
+            <strong>${rank}</strong>
+
+            <span>${remaining} / 4</span>
+
+        `;
+
+
+        summary.appendChild(box);
+
+    });
+
+}
+
+
+/* تراجع */
+
+function undo() {
+
+    if (history.length === 0) return;
+
+
+    const last = history.pop();
+
+
+    const card =
+        cards.find(c => c.id === last.id);
+
+
+    if (card) {
+
+        card.used = last.previous;
+
+    }
+
+
+    renderCards();
+
+}
+
+
+/* جولة جديدة */
+
+function resetGame() {
+
+    const answer =
+        confirm(
+            "هل تريد بدء جولة جديدة وإرجاع جميع الـ52 ورقة؟"
+        );
+
+
+    if (!answer) return;
+
+
+    cards.forEach(card => {
+
+        card.used = false;
+
+    });
+
+
+    history = [];
+
+
+    renderCards();
+
+}
+
+
+/* تشغيل التطبيق */
+
+renderCards();
+
+</script>
+
+</body>
+</html>
